@@ -1,83 +1,69 @@
 ---
-  - name: "Full Automation: Install Docker & Deploy App"
-    hosts: my_computer
-    become: true 
-  
-    vars:
-      docker_id: "larkracl" # [수정] 본인 ID
-      image_name: "mini-app" # 본인이 docker hub에 올린 이미지의 이름과 같게 만들기
-      container_name: "my-running-app"
-  
-    tasks:
-      # ---------------------------------------------------
-      # 1. 도커 설치를 위한 준비물 (보안키, 저장소 주소 등)
-      # ---------------------------------------------------
-      - name: "1. Setup Docker Repository"
-        block:
-          - name: Install dependencies
-            apt:
-              name: [ca-certificates, curl, gnupg, python3-pip]
-              state: present
-              update_cache: yes
-  
-          - name: Add Docker GPG key
-            apt_key:
-              url: https://download.docker.com/linux/ubuntu/gpg
-              state: present
-  
-          - name: Add Docker Repository URL
-            apt_repository:
-              # "우분투용 도커를 다운받겠다"는 주소 등록일 뿐, OS 설치 아님!
-              repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-              state: present
-  
-      # ---------------------------------------------------
-      # 2. 도커 엔진 & 연결 모듈 설치
-      # ---------------------------------------------------
-      - name: "2. Install Docker Engine & Python SDK"
-        block:
-          - name: Install Docker Packages
-            apt:
-              name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin]
-              state: present
-              update_cache: yes
-  
-          - name: Start Docker Service
-            service:
-              name: docker
-              state: started
-              enabled: yes
-  
-          - name: Install Python Docker Module (Required for Ansible)
-            pip:
-              name: docker
-              state: present
-              extra_args: "--break-system-packages"
-            ignore_errors: yes
-  
-      # ---------------------------------------------------
-      # 3. 앱 배포 (이미지 다운로드 -> 컨테이너 실행)
-      # ---------------------------------------------------
-      - name: "3. Deploy Web Application"
-        block:
-          - name: Pull Image
-            docker_image:
-              name: "{{ docker_id }}/{{ image_name }}"
-              tag: latest
-              source: pull
-              force_source: yes
-  
-          - name: Remove Old Container
-            docker_container:
-              name: "{{ container_name }}"
-              state: absent
-              force_kill: yes
-  
-          - name: Run New Container
-            docker_container:
-              name: "{{ container_name }}"
-              image: "{{ docker_id }}/{{ image_name }}:latest"
-              state: started
-              restart_policy: always
-              ports:
-                - "8080:8080"
+- name: "Deploy App to Private Servers via NAT"
+  hosts: app_servers  # <--- 아까 hosts.ini에 만든 그룹명
+  become: true 
+
+  vars:
+    docker_id: "larkracl"
+    image_name: "mini-app"
+    container_name: "my-running-app"
+
+  tasks:
+    # ---------------------------------------------------
+    # 1. 도커 설치 (NAT가 뚫려있어야 성공함!)
+    # ---------------------------------------------------
+    - name: "1. Install Docker Engine"
+      block:
+        - name: Install dependencies
+          apt:
+            name: [ca-certificates, curl, gnupg, python3-pip]
+            state: present
+            update_cache: yes
+
+        - name: Add Docker GPG key
+          apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
+
+        - name: Add Docker Repository
+          apt_repository:
+            repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            state: present
+
+        - name: Install Docker Packages
+          apt:
+            name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin]
+            state: present
+            update_cache: yes
+
+        - name: Install Python Docker SDK
+          pip:
+            name: docker
+            state: present
+            extra_args: "--break-system-packages"
+
+    # ---------------------------------------------------
+    # 2. 앱 배포 (Docker Hub에서 받아오기)
+    # ---------------------------------------------------
+    - name: "2. Deploy Web Application"
+      block:
+        - name: Pull Image from Docker Hub
+          docker_image:
+            name: "{{ docker_id }}/{{ image_name }}"
+            tag: latest
+            source: pull
+            force_source: yes
+
+        - name: Stop and Remove Old Container
+          docker_container:
+            name: "{{ container_name }}"
+            state: absent
+
+        - name: Run New Container
+          docker_container:
+            name: "{{ container_name }}"
+            image: "{{ docker_id }}/{{ image_name }}:latest"
+            state: started
+            restart_policy: always
+            ports:
+              - "8080:8080" # Dockerfile의 EXPOSE 8080에 맞춤
