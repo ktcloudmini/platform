@@ -1,14 +1,33 @@
-name: Deploy to Private EC2
+name: "CI/CD Pipeline (Build: GitHub / Deploy: Monitoring Runner)"
 
 on:
   push:
     branches:
-      - feature/setup-github-runner
+      - feature/setup-github-runner # 현재 작업 브랜치 (이후 main 브랜치로 변경)
 
 jobs:
+  # [JOB 1] 빌드 및 푸시: GitHub 서버(ubuntu-latest) 리소스 사용
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/mini-app:latest -f mini-app/Dockerfile .
+          docker push ${{ secrets.DOCKER_USERNAME }}/mini-app:latest
+
+  # [JOB 2] 배포: 우리 Monitoring EC2(self-hosted) 리소스 사용
   deploy:
-    runs-on: self-hosted # <--- 이게 중요! Monitoring EC2에서 돌아가게 함
-    
+    needs: build-and-push # 빌드가 무조건 성공해야 배포 시작
+    runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -18,11 +37,14 @@ jobs:
           echo "${{ secrets.AWS_SSH_KEY }}" > ktcloud-key.pem
           chmod 400 ktcloud-key.pem
 
-      - name: Install Ansible
+      - name: Ensure Ansible is installed
         run: |
-          sudo apt update
-          sudo apt install -y ansible
+          if ! command -v ansible &> /dev/null; then
+            sudo apt update
+            sudo apt install -y ansible
+          fi
 
       - name: Run Ansible Playbook
         run: |
+          # Git에 포함된 hosts.ini와 deploy_app.yml 사용
           ansible-playbook -i hosts.ini deploy_app.yml
