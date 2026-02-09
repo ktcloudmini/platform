@@ -1,36 +1,45 @@
 const express = require('express');
-const os = require('os'); // 호스트명 가져오려고 추가함
+const os = require('os');
+const { spawn } = require('child_process');
+
 const app = express();
 const port = 8080;
 
-// 1. 기본 경로: 인스턴스 ID(호스트명) 출력
+let isAlive = true;
+
 app.get('/', (req, res) => {
+  if (!isAlive) {
+    return res.status(500).send(`<h1>CRITICAL ERROR: Service on ${os.hostname()} is BROKEN!</h1>`);
+  }
   res.send(`<h1>Instance ID/Hostname: ${os.hostname()}</h1>`);
 });
 
-// 2. 헬스체크: 서버 상태 확인용
 app.get('/health', (req, res) => {
+  if (!isAlive) return res.status(500).send('Unhealthy (Zombie Mode)');
   res.status(200).send('OK');
 });
 
-// 3. 부하 유도: CPU 점유율을 5초 동안 강제로 높임
+function spawnCpuBurn(sec) {
+  const s = Math.max(1, Math.min(sec, 300));
+  const code = `
+    const end = Date.now() + ${s} * 1000;
+    while (Date.now() < end) { Math.sqrt(Math.random()); }
+  `;
+  const child = spawn(process.execPath, ['-e', code], { detached: true, stdio: 'ignore' });
+  child.unref();
+}
+
 app.get('/work', (req, res) => {
-  const start = Date.now();
-  // 5초 동안 무의미한 연산 반복해서 CPU 갈구기
-  while (Date.now() - start < 5000) {
-    Math.random() * Math.random();
-  }
-  res.send('CPU Load Simulation Done');
+  const sec = parseInt(req.query.sec ?? '5', 10) || 5;
+  spawnCpuBurn(sec);
+  res.send(`CPU Load Simulation Started for ${sec}s`);
 });
 
-// 4. 프로세스 강제 종료: 호출 즉시 서버 꺼짐
 app.get('/kill', (req, res) => {
-  res.send('Server process is being killed...');
-  setTimeout(() => {
-    process.exit(1); // 1초 뒤에 프로세스 강제 종료
-  }, 1000);
+  isAlive = false;
+  res.send('Instance entering ZOMBIE mode...');
 });
 
-app.listen(port, () => {
-  console.log(`App listening at http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`App listening at http://0.0.0.0:${port}`);
 });

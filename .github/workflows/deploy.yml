@@ -21,7 +21,7 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/mini-app:latest -f mini-app/Dockerfile .
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/mini-app:latest mini-app/
           docker push ${{ secrets.DOCKER_USERNAME }}/mini-app:latest
 
   # [JOB 2] 배포: 우리 Monitoring EC2(self-hosted) 리소스 사용
