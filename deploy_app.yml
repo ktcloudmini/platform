@@ -40,7 +40,6 @@
           pip:
             name: docker
             state: present
-            extra_args: "--break-system-packages"
 
     # ---------------------------------------------------
     # 2. 앱 배포 (Docker Hub에서 받아오기)
