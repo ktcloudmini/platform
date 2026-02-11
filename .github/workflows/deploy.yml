@@ -3,7 +3,7 @@ name: "CI/CD Pipeline (Build: GitHub / Deploy: Monitoring Runner)"
 on:
   push:
     branches:
-      - feature/setup-github-runner # 현재 작업 브랜치 (이후 main 브랜치로 변경)
+      - main
 
 jobs:
   # [JOB 1] 빌드 및 푸시: GitHub 서버(ubuntu-latest) 리소스 사용
