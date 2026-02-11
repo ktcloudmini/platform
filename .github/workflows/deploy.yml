@@ -46,5 +46,4 @@ jobs:
 
       - name: Run Ansible Playbook
         run: |
-          # Git에 포함된 hosts.ini와 deploy_app.yml 사용
-          ansible-playbook -i hosts.ini deploy_app.yml
+          ansible-playbook deploy_app.yml

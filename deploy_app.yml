@@ -1,6 +1,6 @@
 ---
 - name: "Deploy App to Private Servers via NAT"
-  hosts: app_servers  # <--- 아까 hosts.ini에 만든 그룹명
+  hosts: service # 인스턴스의 태그 참조
   become: true 
 
   vars:

@@ -1,6 +1,6 @@
 ---
 - name: "Bootstrap: Setup GitHub Runner on Monitoring EC2"
-  hosts: bastion
+  hosts: monitoring
   become: no
 
   vars:
