@@ -70,11 +70,20 @@ jobs:
 
       - name: Run setup_runner Ansible Playbook
         env:
-          # 별도의 Secret 추가 없이 내장된 GITHUB_TOKEN을 넘겨줍니다.
-          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 이전 단계에서 저장한 IP를 명시적으로 불러옵니다.
+          MON_IP: ${{ env.MONITORING_IP }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          echo "[monitoring]" > inventory.ini
-          echo "$MONITORING_IP ansible_user=ubuntu ansible_ssh_private_key_file=monitoring_key.pem" >> inventory.ini
+          # 1. 인벤토리 파일 생성 (Heredoc 방식)
+          cat <<EOF > inventory.ini
+          [monitoring]
+          ${MON_IP} ansible_user=ubuntu ansible_ssh_private_key_file=monitoring_key.pem
+          EOF
+
+          # 2. 디버깅: 파일이 제대로 만들어졌는지 로그에 출력 (나중에 확인용)
+          echo "---- 생성된 inventory.ini 내용 ----"
+          cat inventory.ini
+          echo "--------------------------------"
           
           # 플레이북 실행 시 필요한 변수들을 전달
           ansible-playbook -i inventory.ini setup_runner.yml \
