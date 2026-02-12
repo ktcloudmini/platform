@@ -74,20 +74,12 @@ jobs:
           MON_IP: ${{ env.MONITORING_IP }}
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          # 1. 인벤토리 파일 생성 (Heredoc 방식)
-          cat <<EOF > inventory.ini
-          [monitoring]
-          ${MON_IP} ansible_user=ubuntu ansible_ssh_private_key_file=monitoring_key.pem
-          EOF
-
-          # 2. 디버깅: 파일이 제대로 만들어졌는지 로그에 출력 (나중에 확인용)
-          echo "---- 생성된 inventory.ini 내용 ----"
-          cat inventory.ini
-          echo "--------------------------------"
-          
-          # 플레이북 실행 시 필요한 변수들을 전달
-          ansible-playbook -i inventory.ini setup_runner.yml \
-            --extra-vars "gh_token=${{ secrets.GH_PAT }} repo_path=${{ github.repository }}" \
+          # 1. 인벤토리 파일 없이 직접 IP를 지정 (IP 뒤에 쉼표 필수!)
+          # 2. -u로 접속 유저 지정, --private-key로 키 파일 지정
+          ansible-playbook -i "${MON_IP}," setup_runner.yml \
+            -u ubuntu \
+            --private-key monitoring_key.pem \
+            --extra-vars "gh_token=${GH_PAT} repo_path=${{ github.repository }}" \
             --ssh-common-args='-o StrictHostKeyChecking=no'
 
   # [JOB 3] 배포: 우리 Monitoring EC2(self-hosted) 리소스 사용
