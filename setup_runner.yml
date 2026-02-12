@@ -4,63 +4,77 @@
   become: no
 
   vars:
-    # [수정 필요] 1. 본인의 GitHub PAT (Personal Access Token) (github_pat.key에 저장)
-    github_pat: "{{ lookup('file', './github_pat.key') | trim }}"
-    # [수정 필요] 2. 레포지토리 정보 (이후 레포지토리가 바뀌면 수정 불가피)
-    repo_owner: "ktcloudmini"
-    repo_name: "platform"
+    # deploy.yml의 --extra-vars에서 넘겨받을 변수들
+    # gh_token: ${{ secrets.GITHUB_TOKEN }}
+    # repo_path: ${{ github.repository }} (예: ktcloudmini/platform)
     
     runner_dir: "/home/ubuntu/actions-runner"
     runner_version: "2.311.0"
 
   tasks:
-    # 1. 깃허브 API를 통해 실시간 등록 토큰 가져오기
+    # 1. 러너 설치 여부 확인 (중복 설치 방지)
+    - name: Check if runner is already configured
+      stat:
+        path: "{{ runner_dir }}/.runner"
+      register: runner_configured
+
+    # 2. 깃허브 API를 통해 실시간 등록 토큰 가져오기 (설치 안 된 경우만)
     - name: Get GitHub Runner Registration Token from API
       uri:
-        url: "https://api.github.com/repos/{{ repo_owner }}/{{ repo_name }}/actions/runners/registration-token"
+        url: "https://api.github.com/repos/{{ repo_path }}/actions/runners/registration-token"
         method: POST
         headers:
-          Authorization: "token {{ github_pat }}"
-          Accept: "application/vnd.github+json"
+          Authorization: "token {{ gh_token }}"
+          Accept: "application/vnd.github.v3+json"
         status_code: 201
       register: token_response
-      delegate_to: localhost  # 토큰 요청은 내 컴퓨터(로컬)에서 수행
+      delegate_to: localhost
+      when: not runner_configured.stat.exists
 
-    # 2. 러너 설치 폴더 생성
+    # 3. 러너 설치 폴더 생성
     - name: Create directory for GitHub Runner
       file:
         path: "{{ runner_dir }}"
         state: directory
         mode: '0755'
+      when: not runner_configured.stat.exists
 
-    # 3. 러너 패키지 다운로드 및 압축 해제
+    # 4. 러너 패키지 다운로드 및 압축 해제
     - name: Download and Unarchive GitHub Runner
       unarchive:
         src: "https://github.com/actions/runner/releases/download/v{{ runner_version }}/actions-runner-linux-x64-{{ runner_version }}.tar.gz"
         dest: "{{ runner_dir }}"
         remote_src: yes
+      when: not runner_configured.stat.exists
 
-    # 4. 러너 등록 (이미 등록되어 있으면 건너뜀)
+    # 5. 러너 등록
     - name: Configure GitHub Runner
       command: >
-        ./config.sh --url https://github.com/{{ repo_owner }}/{{ repo_name }}
+        ./config.sh --url https://github.com/{{ repo_path }}
         --token {{ token_response.json.token }}
         --unattended --replace --name "Monitoring-Runner"
       args:
         chdir: "{{ runner_dir }}"
-        creates: "{{ runner_dir }}/.runner"
+      when: not runner_configured.stat.exists
 
-    # 5. 서비스 등록 및 시작 (백그라운드 실행을 위해 중요!)
+    # 6. 서비스 등록 및 시작 (항상 체크)
+    - name: Check if runner service is installed
+      stat:
+        path: "/etc/systemd/system/actions.runner.{{ repo_path | replace('/', '-') }}.Monitoring-Runner.service"
+      register: service_file
+
     - name: Install Runner Service
-      become: yes  # 서비스 등록은 root 권한 필요
+      become: yes
       command: "./svc.sh install ubuntu"
       args:
         chdir: "{{ runner_dir }}"
+      when: not service_file.stat.exists
       ignore_errors: yes
 
     - name: Start Runner Service
       become: yes
-      command: "./svc.sh start"
-      args:
-        chdir: "{{ runner_dir }}"
+      systemd:
+        name: "actions.runner.{{ repo_path | replace('/', '-') }}.Monitoring-Runner.service"
+        state: started
+        enabled: yes
       ignore_errors: yes

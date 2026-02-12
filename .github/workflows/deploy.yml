@@ -3,7 +3,12 @@ name: "CI/CD Pipeline (Build: GitHub / Deploy: Monitoring Runner)"
 on:
   push:
     branches:
-      - main
+      - feature/setup-github-runner
+
+permissions:
+  id-token: write
+  contents: read
+  administration: write
 
 jobs:
   # [JOB 1] 빌드 및 푸시: GitHub 서버(ubuntu-latest) 리소스 사용
@@ -24,9 +29,62 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/mini-app:latest mini-app/
           docker push ${{ secrets.DOCKER_USERNAME }}/mini-app:latest
 
-  # [JOB 2] 배포: 우리 Monitoring EC2(self-hosted) 리소스 사용
+  # [JOB 2] self-hosting-runner 설치: GitHub 서버(ubuntu-latest) 리소스 사용
+  setup-monitoring-runner:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-2
+
+      - name: Get Monitoring Instance IP
+        id: get-ip
+        run: |
+          # tag:Role=monitoring 이고 상태가 running인 인스턴스의 Public IP를 가져옵니다.
+          MONITORING_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Role,Values=monitoring" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].PublicIpAddress" \
+            --output text)
+          
+          if [ "$MONITORING_IP" == "None" ] || [ -z "$MONITORING_IP" ]; then
+            echo "Error: 'Role=monitoring' 태그를 가진 실행 중인 인스턴스를 찾을 수 없습니다."
+            exit 1
+          fi
+
+          # 환경변수에 저장하여 다음 스텝에서 사용 가능하게 함
+          echo "MONITORING_IP=$MONITORING_IP" >> $GITHUB_ENV
+          echo "조회된 모니터링 서버 IP: $MONITORING_IP"
+          
+      - name: Setup SSH Key
+        run: |
+          echo "${{ secrets.AWS_SSH_KEY }}" > private_key.pem
+          chmod 400 private_key.pem
+
+      - name: Install Ansible on GitHub Runner
+        run: sudo apt-get update && sudo apt-get install -y ansible
+
+      - name: Run setup_runner Ansible Playbook
+        env:
+          # 별도의 Secret 추가 없이 내장된 GITHUB_TOKEN을 넘겨줍니다.
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "[monitoring]" > inventory.ini
+          echo "$MONITORING_IP ansible_user=ubuntu ansible_ssh_private_key_file=monitoring_key.pem" >> inventory.ini
+          
+          # 플레이북 실행 시 필요한 변수들을 전달
+          ansible-playbook -i inventory.ini setup_runner.yml \
+            --extra-vars "gh_token=$REPO_TOKEN repo_path=${{ github.repository }}" \
+            --ssh-common-args='-o StrictHostKeyChecking=no'
+
+  # [JOB 3] 배포: 우리 Monitoring EC2(self-hosted) 리소스 사용
   deploy:
-    needs: build-and-push # 빌드가 무조건 성공해야 배포 시작
+    needs: setup-monitoring-runner
     runs-on: self-hosted
     steps:
       - name: Checkout code
