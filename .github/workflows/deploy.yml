@@ -70,17 +70,24 @@ jobs:
 
       - name: Run setup_runner Ansible Playbook
         env:
-          # 이전 단계에서 저장한 IP를 명시적으로 불러옵니다.
           MON_IP: ${{ env.MONITORING_IP }}
           GH_PAT: ${{ secrets.GH_PAT }}
+          # Ansible이 파일을 찾지 않고 이 주소를 바로 쓰도록 환경변수 설정
+          ANSIBLE_INVENTORY: ${{ env.MONITORING_IP }},
+          # 호스트 키 검증 생략 (첫 접속 시 에러 방지)
+          ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
-          # 1. 인벤토리 파일 없이 직접 IP를 지정 (IP 뒤에 쉼표 필수!)
-          # 2. -u로 접속 유저 지정, --private-key로 키 파일 지정
-          ansible-playbook -i "${MON_IP}," setup_runner.yml \
+          # 1. IP가 비어있는지 마지막으로 확인
+          if [ -z "$MON_IP" ]; then
+            echo "에러: MONITORING_IP를 찾을 수 없습니다!"
+            exit 1
+          fi
+
+          # 2. 아주 간결하게 실행
+          ansible-playbook setup_runner.yml \
             -u ubuntu \
             --private-key monitoring_key.pem \
-            --extra-vars "gh_token=${GH_PAT} repo_path=${{ github.repository }}" \
-            --ssh-common-args='-o StrictHostKeyChecking=no'
+            --extra-vars "gh_token=${GH_PAT} repo_path=${{ github.repository }}"
 
   # [JOB 3] 배포: 우리 Monitoring EC2(self-hosted) 리소스 사용
   deploy:
