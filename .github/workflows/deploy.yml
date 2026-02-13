@@ -81,14 +81,11 @@ jobs:
           exit 1
           fi
 
-          # 디버깅용(원인 바로 보임)
-          ansible -i "${MON_IP}," all -m ping -u ubuntu --private-key private_key.pem -vvvv || true
-
           ansible-playbook -i "${MON_IP}," setup_runner.yml \
           -u ubuntu \
           --private-key private_key.pem \
           --extra-vars "gh_token=${GH_PAT} repo_path=${{ github.repository }}" \
-          -e "ansible_ssh_common_args=-o StrictHostKeyChecking=no"
+          --ssh-common-args "-o StrictHostKeyChecking=no"
 
   # [JOB 3] 배포: 우리 Monitoring EC2(self-hosted) 리소스 사용
   deploy:
