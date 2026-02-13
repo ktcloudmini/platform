@@ -72,22 +72,23 @@ jobs:
         env:
           MON_IP: ${{ env.MONITORING_IP }}
           GH_PAT: ${{ secrets.GH_PAT }}
-          # Ansible이 파일을 찾지 않고 이 주소를 바로 쓰도록 환경변수 설정
-          ANSIBLE_INVENTORY: ${{ env.MONITORING_IP }},
-          # 호스트 키 검증 생략 (첫 접속 시 에러 방지)
           ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
-          # 1. IP가 비어있는지 마지막으로 확인
+          set -euxo pipefail
+
           if [ -z "$MON_IP" ]; then
-            echo "에러: MONITORING_IP를 찾을 수 없습니다!"
-            exit 1
+          echo "에러: MONITORING_IP를 찾을 수 없습니다!"
+          exit 1
           fi
 
-          # 2. 아주 간결하게 실행
-          ansible-playbook setup_runner.yml \
-            -u ubuntu \
-            --private-key monitoring_key.pem \
-            --extra-vars "gh_token=${GH_PAT} repo_path=${{ github.repository }}"
+          # 디버깅용(원인 바로 보임)
+          ansible -i "${MON_IP}," all -m ping -u ubuntu --private-key private_key.pem -vvvv || true
+
+          ansible-playbook -i "${MON_IP}," setup_runner.yml \
+          -u ubuntu \
+          --private-key private_key.pem \
+          --extra-vars "gh_token=${GH_PAT} repo_path=${{ github.repository }}" \
+          -e "ansible_ssh_common_args=-o StrictHostKeyChecking=no"
 
   # [JOB 3] 배포: 우리 Monitoring EC2(self-hosted) 리소스 사용
   deploy:
