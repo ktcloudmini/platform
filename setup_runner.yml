@@ -1,0 +1,80 @@
+---
+- name: "Bootstrap: Setup GitHub Runner on Monitoring EC2"
+  hosts: all
+  become: no
+
+  vars:
+    # deploy.yml의 --extra-vars에서 넘겨받을 변수들
+    # gh_token: ${{ secrets.GITHUB_TOKEN }}
+    # repo_path: ${{ github.repository }} (예: ktcloudmini/platform)
+    
+    runner_dir: "/home/ubuntu/actions-runner"
+    runner_version: "2.311.0"
+
+  tasks:
+    # 1. 러너 설치 여부 확인 (중복 설치 방지)
+    - name: Check if runner is already configured
+      stat:
+        path: "{{ runner_dir }}/.runner"
+      register: runner_configured
+
+    # 2. 깃허브 API를 통해 실시간 등록 토큰 가져오기 (설치 안 된 경우만)
+    - name: Get GitHub Runner Registration Token from API
+      uri:
+        url: "https://api.github.com/repos/{{ repo_path }}/actions/runners/registration-token"
+        method: POST
+        headers:
+          Authorization: "token {{ gh_token }}"
+          Accept: "application/vnd.github.v3+json"
+        status_code: 201
+      register: token_response
+      delegate_to: localhost
+      when: not runner_configured.stat.exists
+
+    # 3. 러너 설치 폴더 생성
+    - name: Create directory for GitHub Runner
+      file:
+        path: "{{ runner_dir }}"
+        state: directory
+        mode: '0755'
+      when: not runner_configured.stat.exists
+
+    # 4. 러너 패키지 다운로드 및 압축 해제
+    - name: Download and Unarchive GitHub Runner
+      unarchive:
+        src: "https://github.com/actions/runner/releases/download/v{{ runner_version }}/actions-runner-linux-x64-{{ runner_version }}.tar.gz"
+        dest: "{{ runner_dir }}"
+        remote_src: yes
+      when: not runner_configured.stat.exists
+
+    # 5. 러너 등록
+    - name: Configure GitHub Runner
+      command: >
+        ./config.sh --url https://github.com/{{ repo_path }}
+        --token {{ token_response.json.token }}
+        --unattended --replace --name "Monitoring-Runner"
+      args:
+        chdir: "{{ runner_dir }}"
+      when: not runner_configured.stat.exists
+
+    # 6. 서비스 등록 및 시작 (항상 체크)
+    - name: Check if runner service is installed
+      stat:
+        path: "/etc/systemd/system/actions.runner.{{ repo_path | replace('/', '-') }}.Monitoring-Runner.service"
+      register: service_file
+
+    - name: Install Runner Service
+      become: yes
+      command: "./svc.sh install ubuntu"
+      args:
+        chdir: "{{ runner_dir }}"
+      when: not service_file.stat.exists
+      ignore_errors: yes
+
+    - name: Start Runner Service
+      become: yes
+      systemd:
+        name: "actions.runner.{{ repo_path | replace('/', '-') }}.Monitoring-Runner.service"
+        state: started
+        enabled: yes
+      ignore_errors: yes

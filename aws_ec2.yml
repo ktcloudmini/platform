@@ -1,0 +1,16 @@
+plugin: aws_ec2
+regions:
+  - ap-northeast-2
+
+# 태그 기반으로 그룹 나누기
+keyed_groups:
+  - key: tags.Role
+    separator: ""
+
+# 필터링: Role 태그가 있는 애들만 가져오기
+filters:
+  instance-state-name: [running]
+
+# 호스트 이름 설정 (사설 IP 주소 사용)
+hostnames:
+  - private-ip-address
