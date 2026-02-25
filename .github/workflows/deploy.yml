@@ -3,14 +3,14 @@ name: "CI/CD Pipeline (Build: GitHub / Deploy: Monitoring Runner)"
 on:
   push:
     branches:
-      - feature/setup-github-runner
+      - main
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  # [JOB 1] 빌드 및 푸시: GitHub 서버(ubuntu-latest) 리소스 사용
+ # [JOB 1] 빌드 및 푸시: GitHub 서버(ubuntu-latest) 리소스 사용
   build-and-push:
     runs-on: ubuntu-latest
     steps:
