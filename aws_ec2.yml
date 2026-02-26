@@ -14,3 +14,7 @@ filters:
 # 호스트 이름 설정 (사설 IP 주소 사용)
 hostnames:
   - private-ip-address
+
+vars:
+  ansible_user: ubuntu
+  ansible_ssh_private_key_file: /home/ubuntu/platform/ktcolud-key.pem
