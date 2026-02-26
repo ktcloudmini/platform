@@ -43,4 +43,6 @@ jobs:
 
       - name: Run Ansible Playbook
         run: |
-          ansible-playbook deploy_app.yml
+          ansible-playbook deploy_app.yml \
+          --private-key ./ktcloud-key.pem \
+          -u ubuntu
