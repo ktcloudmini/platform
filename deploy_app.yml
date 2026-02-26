@@ -1,6 +1,6 @@
 ---
 - name: "Deploy App to Private Servers via NAT"
-  hosts: service # 인스턴스의 태그 참조
+  hosts: asg # 인스턴스의 태그 참조
   become: true 
 
   vars:
