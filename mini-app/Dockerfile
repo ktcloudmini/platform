@@ -2,7 +2,7 @@ FROM node:18-alpine
 
 WORKDIR /usr/src/app
 
-RUN npm install express
+RUN npm install express prom-client
 
 COPY app.js .
 
