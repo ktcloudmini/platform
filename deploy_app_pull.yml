@@ -1,7 +1,9 @@
 ---
 - name: "Deploy App to Private Servers via NAT"
-  hosts: asg # 인스턴스의 태그 참조
-  become: true 
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
 
   vars:
     docker_id: "larkracl"
