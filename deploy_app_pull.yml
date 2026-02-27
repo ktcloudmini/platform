@@ -1,0 +1,68 @@
+---
+- name: "Deploy App to Private Servers via NAT"
+  hosts: asg # 인스턴스의 태그 참조
+  become: true 
+
+  vars:
+    docker_id: "larkracl"
+    image_name: "mini-app"
+    container_name: "my-running-app"
+
+  tasks:
+    # ---------------------------------------------------
+    # 1. 도커 설치 (NAT가 뚫려있어야 성공함!)
+    # ---------------------------------------------------
+    - name: "1. Install Docker Engine"
+      block:
+        - name: Install dependencies
+          apt:
+            name: [ca-certificates, curl, gnupg, python3-pip]
+            state: present
+            update_cache: yes
+
+        - name: Add Docker GPG key
+          apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
+
+        - name: Add Docker Repository
+          apt_repository:
+            repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            state: present
+
+        - name: Install Docker Packages
+          apt:
+            name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin]
+            state: present
+            update_cache: yes
+
+        - name: Install Python Docker SDK
+          pip:
+            name: docker
+            state: present
+
+    # ---------------------------------------------------
+    # 2. 앱 배포 (Docker Hub에서 받아오기)
+    # ---------------------------------------------------
+    - name: "2. Deploy Web Application"
+      block:
+        - name: Pull Image from Docker Hub
+          docker_image:
+            name: "{{ docker_id }}/{{ image_name }}"
+            tag: latest
+            source: pull
+            force_source: yes
+
+        - name: Stop and Remove Old Container
+          docker_container:
+            name: "{{ container_name }}"
+            state: absent
+
+        - name: Run New Container
+          docker_container:
+            name: "{{ container_name }}"
+            image: "{{ docker_id }}/{{ image_name }}:latest"
+            state: started
+            restart_policy: always
+            ports:
+              - "8080:8080" # Dockerfile의 EXPOSE 8080에 맞춤
