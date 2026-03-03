@@ -94,7 +94,7 @@
 2. GitHub Actions 워크플로우 실행
 3. GitHub-hosted runner(`ubuntu-latest`)가
    - `mini-app/` 기준 도커 이미지 빌드
-   - Docker Hub에 push
+   - Docker Hub에 push 
 
 #### B-2. Monitoring(Self-hosted runner): Deploy(Ansible)
 
